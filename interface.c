@@ -13,14 +13,14 @@ typedef struct Interface {
 	char name[IF_NAMESIZE];
 	_Bool up;
 	_Bool running;
-	char mac[1025];
-	char ipv4[1025];
-	char ipv6[1025];
+	char mac[18];
+	char ipv4[INET_ADDRSTRLEN];
+	char ipv6[INET6_ADDRSTRLEN];
 	struct Interface *next;
 } Interface;
 
 Interface *createNode(const char *s,_Bool up,_Bool running){
-	Interface *node = malloc(sizeof(Interface));
+	Interface *node = calloc(1,sizeof(Interface));
 	if (node == NULL) return NULL;
 	strcpy(node->name,s);
 	node->up = up;
@@ -29,12 +29,12 @@ Interface *createNode(const char *s,_Bool up,_Bool running){
 	return node;
 }
 int probeInterfaces(Interface **head) {
+	*head = NULL;
 	_Bool status = 0;
 	char *errOrigin;
 	struct if_nameindex *if_ni, *i;
 	if_ni = if_nameindex();
 	if (!if_ni) return 1;
-	*head = NULL;
 	Interface *tail = NULL;
 	int sock = socket(AF_INET, SOCK_DGRAM, 0);
 	if (sock < 0) {
@@ -58,7 +58,7 @@ int probeInterfaces(Interface **head) {
 		if (!node) {
 			errOrigin = "creating a node";
 			status = 1;
-			continue;
+			goto cleanup;
 		}
 		if (*head == NULL) {
 			*head = node;
@@ -96,11 +96,11 @@ int ifaddr(Interface *head) {
  		 	 	 }
  		 	 	 if (family == AF_INET) {
 			 	   	struct sockaddr_in *sa = (struct sockaddr_in *)ifa->ifa_addr;
-			 	   	if (inet_ntop(AF_INET, &sa->sin_addr, temp->ipv4, sizeof(temp->ipv4)) == NULL) return 1;
+			 	   	if (inet_ntop(AF_INET, &sa->sin_addr, temp->ipv4, sizeof(temp->ipv4)) == NULL) continue;
  		 	 	 }
  		 	 	 if (family == AF_INET6) {
 			 	   	struct sockaddr_in6 *sa6 = (struct sockaddr_in6 *)ifa->ifa_addr;
-			 	   	if (inet_ntop(AF_INET6, &sa6->sin6_addr, temp->ipv6, sizeof(temp->ipv6)) == NULL) return 1;
+			 	   	if (inet_ntop(AF_INET6, &sa6->sin6_addr, temp->ipv6, sizeof(temp->ipv6)) == NULL) continue;
  		 	 	 }
  		 	 }
  		 }
@@ -112,22 +112,33 @@ int ifaddr(Interface *head) {
 int interfacesPrint(Interface *head) {
 	if (head == NULL) return 1;
 	for (Interface *temp = head; temp != NULL; temp = temp->next) {
-		fprintf(stdout,"interface: %s\n" , temp->name);
+		printf("interface: %s\n" , temp->name);
 		if (!temp->up) {
-			fprintf(stderr, "Interface is Down.\nTry: ip link set {interface name} up\nls /sys/class/net: to see available interfaces\n");
-			return 1;
+			printf("Interface is Down.\nTry: ip link set {interface name} up\nls /sys/class/net: to see available interfaces\n");
+			continue;
 		}
 		if (!temp->running) {
-			fprintf(stderr, "connectivity or driver issue\n");
-		    return 1;
+			printf("Resource Not allocated for the interface (Connectivity) or driver issue\n");
+		    continue;
 		}
-		printf("MAC Address = %s\n" , temp->mac);
-		printf("IPV4 Address = %s\n" , temp->ipv4);
-		printf("IPV6 Address = %s\n" , temp->ipv6);
 		printf("interface is up and running\n");
+
+		char *errorMsg = "Address Not Assigned\n";
+		printf("MAC Address  -> %s\n" , (*temp->mac)  ? temp->mac  : errorMsg);
+		printf("IPV4 Address -> %s\n" , (*temp->ipv4) ? temp->ipv4 : errorMsg);
+		printf("IPV6 Address -> %s\n" , (*temp->ipv6) ? temp->ipv6 : errorMsg);
+
 		printf("----------------------\n");
 	}
 	return 0;
+}
+
+void freeInterface(Interface *head) {
+	while (head) {
+		Interface *next = head->next;
+		free(head);
+		head = next;
+	}
 }
 
 int main() {
@@ -144,9 +155,8 @@ int main() {
 	if (interfacesPrint(head)) {
 		status = 1;
 		goto cleanup;
-	} return 1;
-
+	}
 	cleanup:
-	if (head) free(head);
+	if (head) freeInterface(head);
 	return status;
 }

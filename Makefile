@@ -1,6 +1,6 @@
 C = gcc
 CFLAGS = -Wall -Wextra -Wpedantic -Werror -O2
-FILES = layerOne.c
+FILES = interface.c
 
 build:$(FILES)
 	mkdir -p ./build

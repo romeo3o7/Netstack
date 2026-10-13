@@ -8,6 +8,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <ifaddrs.h>
+#include "interface.h"
 
 typedef struct Interface {
 	char name[IF_NAMESIZE];
@@ -19,8 +20,8 @@ typedef struct Interface {
 	struct Interface *next;
 } Interface;
 
-Interface *createNode(const char *s,_Bool up,_Bool running){
-	Interface *node = calloc(1,sizeof(Interface));
+static Interface *createNode(const char *s,_Bool up,_Bool running){
+	Interface *node = (Interface *)calloc(1,sizeof(Interface));
 	if (node == NULL) return NULL;
 	strcpy(node->name,s);
 	node->up = up;
@@ -28,10 +29,10 @@ Interface *createNode(const char *s,_Bool up,_Bool running){
 	node->next = NULL;
 	return node;
 }
-int probeInterfaces(Interface **head) {
+static int probeInterfaces(Interface **head) {
 	*head = NULL;
 	_Bool status = 0;
-	char *errOrigin;
+	char *errOrigin = "no Error";
 	struct if_nameindex *if_ni, *i;
 	if_ni = if_nameindex();
 	if (!if_ni) return 1;
@@ -74,7 +75,7 @@ int probeInterfaces(Interface **head) {
 	return status;
 }
 
-int ifaddr(Interface *head) {
+static int ifaddr(Interface *head) {
  	 struct ifaddrs *ifaddr;
  	 if (getifaddrs(&ifaddr) == -1) return 1;
 	 for (Interface *temp = head; temp != NULL; temp = temp->next) {
@@ -87,20 +88,23 @@ int ifaddr(Interface *head) {
  		 	  family = ifa->ifa_addr->sa_family;
  		 	  if (strcmp(ifa->ifa_name, target) == 0) {
  		 	 	 if (family == AF_PACKET) {
-			 	   	struct sockaddr_ll *sl = (struct sockaddr_ll *)ifa->ifa_addr;
-			 	   	if (sl->sll_halen == 6) {
+			 	   	struct sockaddr_ll sl;
+					memcpy(&sl,ifa->ifa_addr,sizeof(sl));
+			 	   	if (sl.sll_halen == 6) {
 			 	   	  snprintf(temp->mac, sizeof(temp->mac), "%02x:%02x:%02x:%02x:%02x:%02x",
-			 	   			   sl->sll_addr[0], sl->sll_addr[1], sl->sll_addr[2],
-			 	   			   sl->sll_addr[3], sl->sll_addr[4], sl->sll_addr[5]);
+			 	   			   sl.sll_addr[0], sl.sll_addr[1], sl.sll_addr[2],
+			 	   			   sl.sll_addr[3], sl.sll_addr[4], sl.sll_addr[5]);
 			 	   	}
  		 	 	 }
  		 	 	 if (family == AF_INET) {
-			 	   	struct sockaddr_in *sa = (struct sockaddr_in *)ifa->ifa_addr;
-			 	   	if (inet_ntop(AF_INET, &sa->sin_addr, temp->ipv4, sizeof(temp->ipv4)) == NULL) continue;
+			 	   	struct sockaddr_in sa;
+					memcpy(&sa,ifa->ifa_addr,sizeof(sa));
+			 	   	if (inet_ntop(AF_INET, &sa.sin_addr, temp->ipv4, sizeof(temp->ipv4)) == NULL) continue;
  		 	 	 }
  		 	 	 if (family == AF_INET6) {
-			 	   	struct sockaddr_in6 *sa6 = (struct sockaddr_in6 *)ifa->ifa_addr;
-			 	   	if (inet_ntop(AF_INET6, &sa6->sin6_addr, temp->ipv6, sizeof(temp->ipv6)) == NULL) continue;
+			 	   	struct sockaddr_in6 sa6;
+					memcpy(&sa6,ifa->ifa_addr,sizeof(sa6));
+			 	   	if (inet_ntop(AF_INET6, &sa6.sin6_addr, temp->ipv6, sizeof(temp->ipv6)) == NULL) continue;
  		 	 	 }
  		 	 }
  		 }
@@ -109,7 +113,7 @@ int ifaddr(Interface *head) {
  	 return 0;
 }
 
-int interfacesPrint(Interface *head) {
+static int interfacesPrint(Interface *head) {
 	if (head == NULL) return 1;
 	for (Interface *temp = head; temp != NULL; temp = temp->next) {
 		printf("interface: %s\n" , temp->name);
@@ -133,7 +137,7 @@ int interfacesPrint(Interface *head) {
 	return 0;
 }
 
-void freeInterface(Interface *head) {
+static void freeInterface(Interface *head) {
 	while (head) {
 		Interface *next = head->next;
 		free(head);
@@ -141,7 +145,7 @@ void freeInterface(Interface *head) {
 	}
 }
 
-int main() {
+int callinterfaces(void) {
 	int status = 0;
 	Interface *head = NULL;
 	if (probeInterfaces(&head)) {

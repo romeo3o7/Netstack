@@ -1,10 +1,13 @@
 #include "interface.h"
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wcast-align"
+
 int get_default_gateway(Interface *head) {
     int sock = socket(PF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE);
     if (sock < 0) return -1;
 
-    char buf[8192] = {0};
+    _Alignas(struct nlmsghdr) char buf[8192] = {0};
     struct nlmsghdr *nlh = (struct nlmsghdr *)buf;
 
     nlh->nlmsg_len   = NLMSG_LENGTH(sizeof(struct rtmsg));
@@ -18,7 +21,7 @@ int get_default_gateway(Interface *head) {
         return -1;
     }
 
-    _Bool found = 0;
+    _Bool notfound = 1;
     _Bool done  = 0;
 
     while (!done) {
@@ -46,7 +49,7 @@ int get_default_gateway(Interface *head) {
             _Bool has_gw = 0;
 
             struct rtattr *rta = RTM_RTA(rtm);
-            int rta_len = RTM_PAYLOAD(h);
+            size_t rta_len = RTM_PAYLOAD(h);
 
             for (; RTA_OK(rta, rta_len); rta = RTA_NEXT(rta, rta_len)) {
                 if (rta->rta_type == RTA_GATEWAY) {
@@ -62,6 +65,7 @@ int get_default_gateway(Interface *head) {
             for (Interface *temp = head; temp != NULL; temp = temp->next) {
                 if (temp->ifindex == ifindex) {
                     memcpy(temp->gateway,gw,sizeof(temp->gateway));
+					notfound = 0;
                     break;
                 }
             }
@@ -69,5 +73,6 @@ int get_default_gateway(Interface *head) {
     }
 
     close(sock);
-    return found;
+    return notfound;
 }
+#pragma clang diagnostic pop

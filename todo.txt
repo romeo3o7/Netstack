@@ -1,9 +1,0 @@
-Done {
-
-}
-
-pending {
-	- Many Addreses per interface, Implement a struct for ipv4, ipv6
-	- Gateway Discovery per interface
-}
-
